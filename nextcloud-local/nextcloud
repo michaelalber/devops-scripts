@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# This file:
+# Nextcloud set up in a local/vagrant environment
 #
-#  - Demos BASH3 Boilerplate (change this for your script)
 #
 # Usage:
 #
@@ -407,46 +406,27 @@ fi
 ### Runtime
 ##############################################################################
 
-info "__i_am_main_script: ${__i_am_main_script}"
-info "__file: ${__file}"
-info "__dir: ${__dir}"
-info "__base: ${__base}"
-info "OSTYPE: ${OSTYPE}"
-
-info "arg_f: ${arg_f}"
-info "arg_d: ${arg_d}"
-info "arg_v: ${arg_v}"
-info "arg_h: ${arg_h}"
-
-# shellcheck disable=SC2015
-if [[ -n "${arg_i:-}" ]] && declare -p arg_i 2> /dev/null | grep -q '^declare \-a'; then
-  info "arg_i:"
-  for input_file in "${arg_i[@]}"; do
-    info " - ${input_file}"
-  done
-elif [[ -n "${arg_i:-}" ]]; then
-  info "arg_i: ${arg_i}"
-else
-  info "arg_i: 0"
+# Make sure only root can run our script
+if [[ $EUID -ne 0 ]]; then
+   critical "This script must be run as root"
+   exit 1
 fi
 
-# shellcheck disable=SC2015
-if [[ -n "${arg_x:-}" ]] && declare -p arg_x 2> /dev/null | grep -q '^declare \-a'; then
-  info "arg_x: ${#arg_x[@]}"
-elif [[ -n "${arg_x:-}" ]]; then
-  info "arg_x: ${arg_x}"
-else
-  info "arg_x: 0"
-fi
+# Update Ubuntu
+apt update
+apt -y install software-properties-common
+add-apt-repository -y ppa:ondrej/php
+apt update
+apt -y upgrade
 
-info "$(echo -e "multiple lines example - line #1\\nmultiple lines example - line #2\\nimagine logging the output of 'ls -al /path/'")"
+info "Installing Apache and Updating the Firewall"
+apt -y install apache2
+ufw allow in "Apache Full"
 
-# All of these go to STDERR, so you can use STDOUT for piping machine readable information to other software
-debug "Info useful to developers for debugging the application, not useful during operations."
-info "Normal operational messages - may be harvested for reporting, measuring throughput, etc. - no action required."
-notice "Events that are unusual but not error conditions - might be summarized in an email to developers or admins to spot potential problems - no immediate action required."
-warning "Warning messages, not an error, but indication that an error will occur if action is not taken, e.g. file system 85% full - each item must be resolved within a given time. This is a debug message"
-error "Non-urgent failures, these should be relayed to developers or admins; each item must be resolved within a given time."
-critical "Should be corrected immediately, but indicates failure in a primary system, an example is a loss of a backup ISP connection."
-alert "Should be corrected immediately, therefore notify staff who can fix the problem. An example would be the loss of a primary ISP connection."
-emergency "A \"panic\" condition usually affecting multiple apps/servers/sites. At this level it would usually notify all tech staff on call."
+info "Installing MySQL"
+apt -y install mysql-server
+
+info "Installing PHP"
+apt -y install php7.4 libapache2-mod-php7.4 php7.4-common php7.4-mysql php7.4-gmp php7.4-curl php7.4-intl php7.4-mbstring php7.4-xmlrpc php7.4-gd php7.4-xml php7.4-cli php7.4-zip php7.4-json php7.4-intl php-imagick
+
+systemctl restart apache2
