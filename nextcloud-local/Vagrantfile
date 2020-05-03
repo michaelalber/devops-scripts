@@ -72,5 +72,7 @@ Vagrant.configure("2") do |config|
   #   apt-get update
   #   apt-get install -y apache2
   # SHELL
-  #config.vm.provision "shell", path: "nextcloud"
+  config.vm.provision "shell", inline: <<-SHELL
+    snap install nextcloud
+  SHELL  
 end
