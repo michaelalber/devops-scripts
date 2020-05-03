@@ -136,7 +136,7 @@ function help () {
 
 # shellcheck disable=SC2015
 [[ "${__usage+x}" ]] || read -r -d '' __usage <<-'EOF' || true # exits non-zero when EOF encountered
-  -f --file  [arg] Filename to process. Required.
+  -f --file  [arg] Filename to process.
   -t --temp  [arg] Location of tempfile. Default="/tmp/bar"
   -v               Enable verbose mode, print script as it is executed
   -d --debug       Enables debug mode
@@ -399,7 +399,6 @@ fi
 ### Validation. Error out if the things required for your script are not present
 ##############################################################################
 
-[[ "${arg_f:-}" ]]     || help      "Setting a filename with -f or --file is required"
 [[ "${LOG_LEVEL:-}" ]] || emergency "Cannot continue without LOG_LEVEL. "
 
 
@@ -412,21 +411,40 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-# Update Ubuntu
-apt update
-apt -y install software-properties-common
-add-apt-repository -y ppa:ondrej/php
-apt update
-apt -y upgrade
+export DEBIAN_FRONTEND=noninteractive
 
-info "Installing Apache and Updating the Firewall"
-apt -y install apache2
-ufw allow in "Apache Full"
+MYSQL_ROOTPASS="devWhyVMWDbUkBJFcXW9sXA44Nc2kUxfFHzrXskz"
+
+# Update Ubuntu
+apt-get update
+apt-get -y install software-properties-common
+add-apt-repository -y ppa:ondrej/php
+apt-get update
+apt-get -y upgrade
 
 info "Installing MySQL"
-apt -y install mysql-server
+debconf-set-selections <<< "mysql-server mysql-server/root_password password $MYSQL_ROOTPASS"
+debconf-set-selections <<< "mysql-server mysql-server/root_password_again password $MYSQL_ROOTPASS"
+apt-get -y install mysql-server
+
+info  "Configuring MySQL"
+chown -R mysql.mysql /var/lib/mysql
+systemctl enable mysql.service
+systemctl start mysql.service
+
+info "MySQL Server installation has finished!"
+
+info "Installing Apache and Updating the Firewall"
+apt-get -y install apache2
+ufw allow in "Apache Full"
 
 info "Installing PHP"
-apt -y install php7.4 libapache2-mod-php7.4 php7.4-common php7.4-mysql php7.4-gmp php7.4-curl php7.4-intl php7.4-mbstring php7.4-xmlrpc php7.4-gd php7.4-xml php7.4-cli php7.4-zip php7.4-json php7.4-intl php-imagick
+apt-get -y install php7.4 libapache2-mod-php7.4 php7.4-common php7.4-mysql php7.4-gmp php7.4-curl php7.4-intl php7.4-mbstring php7.4-xmlrpc php7.4-gd php7.4-xml php7.4-cli php7.4-zip php7.4-json php7.4-intl php-imagick
+
+info "PHP installation has finished!"
 
 systemctl restart apache2
+systemctl enable apache2
+
+
+history -c
