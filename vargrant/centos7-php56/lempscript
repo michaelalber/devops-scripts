@@ -1,0 +1,20 @@
+yum update
+
+yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch
+yum install -y http://rpms.remirepo.net/enterprise/remi-release-7.rpm
+
+yum install -y yum-utils
+
+yum-config-manager --enable remi-php56
+yum install -y php php-mcrypt php-cli php-gd php-curl php-mysql php-ldap php-zip php-fileinfo
+
+yum install -y nginx
+systemctl start nginx
+systemctl enable nginx
+
+yum install -y mariadb-server mariadb
+systemctl start mariadb
+systemctl enable mariadb
+
+
+yum install -y php php-mysqlnd php-fpm

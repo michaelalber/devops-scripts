@@ -1,0 +1,176 @@
+#!/usr/bin/env bash
+#
+# CentOS 7 PHP 7.0 LEMP Stack
+
+# Based on a template by BASH3 Boilerplate v2.3.0
+# http://bash3boilerplate.sh/#authors
+#
+# The MIT License (MIT)
+# Copyright (c) 2013 Kevin van Zonneveld and contributors
+# You are not obligated to bundle the LICENSE file with your b3bp projects as long
+# as you leave these references intact in the header comments of your source files.
+
+# Exit on error. Append "|| true" if you expect an error.
+#set -o errexit
+# Exit on error inside any functions or subshells.
+#set -o errtrace
+# Do not allow use of undefined vars. Use ${VAR:-} to use an undefined VAR
+# set -o nounset
+# Catch the error in case mysqldump fails (but gzip succeeds) in `mysqldump |gzip`
+#set -o pipefail
+# Turn on traces, useful while debugging but commented out by default
+# set -o xtrace
+
+# Set magic variables for current file, directory, os, etc.
+__dir="$(cd "$(dirname "${BASH_SOURCE[${__b3bp_tmp_source_idx:-0}]}")" && pwd)"
+__file="${__dir}/$(basename "${BASH_SOURCE[${__b3bp_tmp_source_idx:-0}]}")"
+__base="$(basename "${__file}" .sh)"
+
+
+# Define the environment variables (and their defaults) that this script depends on
+LOG_LEVEL="${LOG_LEVEL:-6}" # 7 = debug -> 0 = emergency
+NO_COLOR="${NO_COLOR:-}"    # true = disable color. otherwise autodetected
+
+DB_ROOT_PASSWORD="root"
+
+### Functions
+##############################################################################
+
+function __b3bp_log () {
+  local log_level="${1}"
+  shift
+
+  # shellcheck disable=SC2034
+  local color_debug="\x1b[35m"
+  # shellcheck disable=SC2034
+  local color_info="\x1b[32m"
+  # shellcheck disable=SC2034
+  local color_notice="\x1b[34m"
+  # shellcheck disable=SC2034
+  local color_warning="\x1b[33m"
+  # shellcheck disable=SC2034
+  local color_error="\x1b[31m"
+  # shellcheck disable=SC2034
+  local color_critical="\x1b[1;31m"
+  # shellcheck disable=SC2034
+  local color_alert="\x1b[1;33;41m"
+  # shellcheck disable=SC2034
+  local color_emergency="\x1b[1;4;5;33;41m"
+
+  local colorvar="color_${log_level}"
+
+  local color="${!colorvar:-${color_error}}"
+  local color_reset="\x1b[0m"
+
+  if [[ "${NO_COLOR:-}" = "true" ]] || [[ "${TERM:-}" != "xterm"* ]] || [[ ! -t 2 ]]; then
+    if [[ "${NO_COLOR:-}" != "false" ]]; then
+      # Don't use colors on pipes or non-recognized terminals
+      color=""; color_reset=""
+    fi
+  fi
+
+  # all remaining arguments are to be printed
+  local log_line=""
+
+  while IFS=$'\n' read -r log_line; do
+    echo -e "$(date -u +"%Y-%m-%d %H:%M:%S UTC") ${color}$(printf "[%9s]" "${log_level}")${color_reset} ${log_line}" 1>&2
+  done <<< "${@:-}"
+}
+
+function emergency () {                                __b3bp_log emergency "${@}"; exit 1; }
+function alert ()     { [[ "${LOG_LEVEL:-0}" -ge 1 ]] && __b3bp_log alert "${@}"; true; }
+function critical ()  { [[ "${LOG_LEVEL:-0}" -ge 2 ]] && __b3bp_log critical "${@}"; true; }
+function error ()     { [[ "${LOG_LEVEL:-0}" -ge 3 ]] && __b3bp_log error "${@}"; true; }
+function warning ()   { [[ "${LOG_LEVEL:-0}" -ge 4 ]] && __b3bp_log warning "${@}"; true; }
+function notice ()    { [[ "${LOG_LEVEL:-0}" -ge 5 ]] && __b3bp_log notice "${@}"; true; }
+function info ()      { [[ "${LOG_LEVEL:-0}" -ge 6 ]] && __b3bp_log info "${@}"; true; }
+function debug ()     { [[ "${LOG_LEVEL:-0}" -ge 7 ]] && __b3bp_log debug "${@}"; true; }
+
+function help () {
+  echo "" 1>&2
+  echo " ${*}" 1>&2
+  echo "" 1>&2
+  echo "  ${__usage:-No usage available}" 1>&2
+  echo "" 1>&2
+
+  if [[ "${__helptext:-}" ]]; then
+    echo " ${__helptext}" 1>&2
+    echo "" 1>&2
+  fi
+
+  exit 1
+}
+
+# Update Linux and install essential packages
+info "Update Linux and install essential packages"
+yum update
+
+yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch
+yum install -y http://rpms.remirepo.net/enterprise/remi-release-7.rpm
+
+yum install -y yum-utils gcc make python3 gcc-c++ git
+
+# Install PHP7
+info "Install PHP7"
+
+yum-config-manager --enable remi-php70
+yum install -y php php-mcrypt php-cli php-gd php-curl php-mysql php-ldap php-zip php-fileinfo
+
+# NodeJS and Yarn
+info "Install NodeJS and Yarn"
+yum -y install nodejs
+npm install yarn -g
+
+# Nginx
+info "Install Nginx"
+yum install -y nginx
+
+# MariaDB Server for local development
+info "Install MariaDB Server 5.5"
+
+yum install -y mariadb-server mariadb
+systemctl start mariadb
+systemctl enable mariadb
+
+yum install -y php php-mysqlnd php-fpm
+
+info "Installing Composer..."
+curl -sS https://getcomposer.org/installer | php -- --install-dir=/home
+mv /home/composer.phar /usr/sbin/composer
+
+export PATH=$PATH:~/.composer/bin
+cat "export PATH=$PATH:~/.composer/bin:~/.composer/vendor/bin" >> ~/.bashrc
+
+info "Set MariaDB Server root password"
+mysql --user=root <<_EOF_
+  UPDATE mysql.user SET Password=PASSWORD('${DB_ROOT_PASSWORD}') WHERE User='root';
+  DELETE FROM mysql.user WHERE User='';
+  DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+  DROP DATABASE IF EXISTS test;
+  DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+  FLUSH PRIVILEGES;
+_EOF_
+
+# Allow file permissions necessary to serve website/app files
+echo "/usr/sbin/setenforce permissive" >> /etc/rc.local
+chmod +x /etc/rc.local
+setenforce permissive
+
+info "Configuring PHP-FPM"
+sed -i "s/;user = .*/user = nginx/g" /etc/php-fpm.d/www.conf
+sed -i "s/;group = .*/group = nginx/g" /etc/php-fpm.d/www.conf
+sed -i "s/;listen.owner = .*/listen.owner = nginx/g" /etc/php-fpm.d/www.conf
+sed -i "s/;listen.group = .*/listen.group = nginx/g" /etc/php-fpm.d/www.conf
+sed -i "s/;listen.mode = .*/listen.mode = 0660/g" /etc/php-fpm.d/www.conf
+sed -i "s/listen = 127.0.0.1:9000/listen = \/var\/run\/php-fpm\/php-fpm.sock/g" /etc/php-fpm.d/www.conf
+echo "cgi.fix_pathinfo=0" >> /etc/php.ini
+
+
+
+info "Enabling and Starting PHP-FPM..."
+systemctl enable php-fpm
+systemctl start php-fpm
+
+info "Enabling and Starting Nginx..."
+systemctl enable nginx
+systemctl start nginx
