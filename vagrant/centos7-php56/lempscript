@@ -3,6 +3,9 @@
 # CentOS 7 LEMP Stack - PHP 5.6
 # PHP 5.6 unsupported as of December 31, 2018
 #
+# Michael K. Alber <malber@interactplatform.io>
+# https://interactpoint.net/
+#
 # Based on a template by BASH3 Boilerplate v2.3.0
 # http://bash3boilerplate.sh/#authors
 #
